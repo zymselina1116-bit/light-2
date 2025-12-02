@@ -17,6 +17,8 @@ const state = {
     ignitionProgress: 0,
     fireLit: false,
     cottonPlaced: false,
+    cottonInFire: false,
+    showForest: false,
     flameSize: 1,
     mouseX: 0,
     mouseY: 0,
@@ -24,7 +26,9 @@ const state = {
     prevMouseY: 0,
     mouseSpeed: 0,
     draggingItem: null,
-    dragOffset: { x: 0, y: 0 }
+    dragOffset: { x: 0, y: 0 },
+    isRotating: false,
+    rotatingSpindle: false
 };
 
 // Spindle configurations
@@ -102,8 +106,8 @@ let spindleContactY;
 function updatePositions() {
     centerX = canvas.width / 2;
     centerY = canvas.height / 2;
-    baseY = centerY + 50;
-    spindleContactY = centerY + 40;
+    baseY = centerY + 100;
+    spindleContactY = centerY + 80;
 
     // Update draggable item positions on resize
     items[0].x = canvas.width - 150;
@@ -135,47 +139,65 @@ canvas.addEventListener('mousemove', (e) => {
 
     lastMouseMoveTime = currentTime;
 
-    // Handle dragging
-    if (state.draggingItem) {
+    // Handle dragging items
+    if (state.draggingItem && state.draggingItem !== 'spindle') {
         const item = items.find(i => i.id === state.draggingItem);
         if (item && !item.placed) {
             item.x = state.mouseX - state.dragOffset.x;
             item.y = state.mouseY - state.dragOffset.y;
         }
-    } else if (state.fireLit && state.draggingItem === 'fan') {
-        // Fan increases flame based on drag speed
-        const fanSpeed = Math.sqrt(dx * dx + dy * dy);
-        state.flameSize += fanSpeed * 0.005;
-        state.flameSize = Math.min(state.flameSize, 3);
+
+        // Fan increases flame based on drag speed when near fire
+        if (state.draggingItem === 'fan' && state.fireLit) {
+            const distToFire = Math.sqrt((state.mouseX - centerX) ** 2 + (state.mouseY - centerY) ** 2);
+            if (distToFire < 150) {
+                const fanSpeed = Math.sqrt(dx * dx + dy * dy);
+                state.flameSize += fanSpeed * 0.008;
+                state.flameSize = Math.min(state.flameSize, 4);
+            }
+        }
+    }
+
+    // Handle spindle rotation via drag
+    if (state.rotatingSpindle && !state.fireLit) {
+        state.mouseSpeed = Math.sqrt(dx * dx + dy * dy) / (deltaTime / 16.67);
     }
 });
 
 // Decay mouse speed when not moving
 setInterval(() => {
     const currentTime = Date.now();
-    if (currentTime - lastMouseMoveTime > 100) {
+    if (currentTime - lastMouseMoveTime > 100 || !state.rotatingSpindle) {
         state.mouseSpeed *= 0.9;
         if (state.mouseSpeed < 0.01) state.mouseSpeed = 0;
     }
 }, 16);
 
-// Click handler for spindle mode change
-canvas.addEventListener('click', (e) => {
-    if (state.fireLit) return;
-
-    const dx = e.clientX - centerX;
-    const dy = e.clientY - (centerY - 50);
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Check if clicked on spindle
-    if (distance < 30) {
-        state.spindleMode = (state.spindleMode + 1) % 3;
-        state.ignitionProgress = 0; // Reset progress on mode change
-    }
-});
-
 // Drag and drop handlers
 canvas.addEventListener('mousedown', (e) => {
+    // Check if clicking on spindle for rotation or mode change
+    if (!state.fireLit) {
+        const dx = e.clientX - centerX;
+        const dy = e.clientY - (centerY - 80);
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < 60) {
+            if (e.shiftKey) {
+                // Shift+click to change mode
+                state.spindleMode = (state.spindleMode + 1) % 3;
+                state.ignitionProgress = 0;
+                return;
+            } else {
+                // Regular click to start rotating
+                state.rotatingSpindle = true;
+                state.draggingItem = 'spindle';
+                canvas.classList.add('dragging');
+                return;
+            }
+        }
+    }
+
+    // Check for draggable items
     for (const item of items) {
         if (!item.available || item.placed) continue;
 
@@ -192,22 +214,45 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 canvas.addEventListener('mouseup', (e) => {
+    if (state.draggingItem === 'spindle') {
+        state.rotatingSpindle = false;
+        state.draggingItem = null;
+        canvas.classList.remove('dragging');
+        return;
+    }
+
     if (state.draggingItem) {
         const item = items.find(i => i.id === state.draggingItem);
 
         if (item) {
             // Check drop zones
             if (item.id === 'cotton' && !state.fireLit) {
-                // Check if dropped near contact point
+                // Check if dropped near contact point (before fire)
                 const dx = e.clientX - centerX;
                 const dy = e.clientY - spindleContactY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance < 60) {
+                if (distance < 80) {
                     item.placed = true;
-                    item.x = centerX - 25;
-                    item.y = spindleContactY - 15;
+                    item.x = centerX - 40;
+                    item.y = spindleContactY - 25;
                     state.cottonPlaced = true;
+                } else {
+                    // Return to original position
+                    item.x = canvas.width - 150;
+                    item.y = 150;
+                }
+            } else if (item.id === 'cotton' && state.fireLit) {
+                // Check if dropped on flame (after fire is lit)
+                const dx = e.clientX - centerX;
+                const dy = e.clientY - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < 100) {
+                    state.cottonInFire = true;
+                    state.showForest = true;
+                    state.flameSize += 1.5;
+                    item.available = false;
                 } else {
                     // Return to original position
                     item.x = canvas.width - 150;
@@ -219,7 +264,7 @@ canvas.addEventListener('mouseup', (e) => {
                 const dy = e.clientY - centerY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance < 80) {
+                if (distance < 100) {
                     extinguishFire();
                 }
                 // Return bucket to original position
@@ -246,16 +291,19 @@ function extinguishFire() {
     state.ignitionProgress = 0;
     state.rotation = 0;
     state.rotationSpeed = 0;
+    state.cottonInFire = false;
+    state.showForest = false;
     sparks.length = 0;
 
     // Reset cotton
+    const cottonItem = items.find(i => i.id === 'cotton');
     if (state.cottonPlaced) {
-        const cottonItem = items.find(i => i.id === 'cotton');
         cottonItem.placed = false;
         cottonItem.x = canvas.width - 150;
         cottonItem.y = 150;
         state.cottonPlaced = false;
     }
+    cottonItem.available = true;
 
     // Disable fan and bucket
     items.find(i => i.id === 'fan').available = false;
@@ -305,9 +353,14 @@ function update(deltaTime) {
             if (state.ignitionProgress >= 1) {
                 state.fireLit = true;
                 state.ignitionProgress = 1;
-                // Enable fan and bucket
+                // Enable fan, bucket, and cotton (for adding to fire)
                 items.find(i => i.id === 'fan').available = true;
                 items.find(i => i.id === 'bucket').available = true;
+                const cottonItem = items.find(i => i.id === 'cotton');
+                if (!state.cottonInFire) {
+                    cottonItem.available = true;
+                    cottonItem.placed = false;
+                }
             }
         } else if (state.rotationSpeed < 1) {
             // Reset progress if rotation stops
@@ -344,13 +397,21 @@ function update(deltaTime) {
 // Draw functions
 function drawBase() {
     ctx.fillStyle = '#654321';
-    ctx.fillRect(centerX - 100, baseY - 10, 200, 20);
+    ctx.fillRect(centerX - 180, baseY - 20, 360, 40);
 
     // Base texture
     ctx.fillStyle = '#4a3319';
-    for (let i = 0; i < 5; i++) {
-        const x = centerX - 90 + i * 40;
-        ctx.fillRect(x, baseY - 8, 2, 16);
+    for (let i = 0; i < 8; i++) {
+        const x = centerX - 160 + i * 40;
+        ctx.fillRect(x, baseY - 16, 3, 32);
+    }
+
+    // Add some wood grain detail
+    ctx.fillStyle = '#543210';
+    for (let i = 0; i < 6; i++) {
+        const x = centerX - 140 + i * 50;
+        ctx.fillRect(x, baseY - 10, 20, 4);
+        ctx.fillRect(x + 10, baseY + 5, 15, 3);
     }
 }
 
@@ -360,69 +421,85 @@ function drawSpindle() {
     const config = spindleConfigs[state.spindleMode];
 
     ctx.save();
-    ctx.translate(centerX, centerY - 50);
+    ctx.translate(centerX, centerY - 80);
     ctx.rotate(state.rotation);
 
     // Draw spindle based on mode
     ctx.fillStyle = config.color;
 
     if (state.spindleMode === 0) {
-        // Normal wood - flat ends
-        ctx.fillRect(-8, -60, 16, 120);
+        // Normal wood - flat ends (larger)
+        ctx.fillRect(-15, -100, 30, 200);
         // Top cap
-        ctx.fillRect(-10, -62, 20, 4);
+        ctx.fillRect(-18, -104, 36, 6);
         // Bottom cap
-        ctx.fillRect(-10, 58, 20, 4);
+        ctx.fillRect(-18, 98, 36, 6);
+
+        // Wood grain
+        ctx.fillStyle = '#6B3410';
+        for (let i = -80; i < 80; i += 20) {
+            ctx.fillRect(-13, i, 2, 12);
+            ctx.fillRect(11, i + 5, 2, 12);
+        }
     } else if (state.spindleMode === 1) {
-        // Pointed wood
+        // Pointed wood (larger)
         ctx.beginPath();
-        ctx.moveTo(0, -60);
-        ctx.lineTo(-8, -50);
-        ctx.lineTo(-8, 50);
-        ctx.lineTo(0, 60);
-        ctx.lineTo(8, 50);
-        ctx.lineTo(8, -50);
+        ctx.moveTo(0, -100);
+        ctx.lineTo(-15, -85);
+        ctx.lineTo(-15, 85);
+        ctx.lineTo(0, 100);
+        ctx.lineTo(15, 85);
+        ctx.lineTo(15, -85);
         ctx.closePath();
         ctx.fill();
+
+        // Wood grain
+        ctx.fillStyle = '#8B5A2B';
+        for (let i = -70; i < 70; i += 20) {
+            ctx.fillRect(-12, i, 2, 12);
+            ctx.fillRect(10, i + 5, 2, 12);
+        }
     } else if (state.spindleMode === 2) {
-        // Iron - metallic look
-        ctx.fillRect(-7, -60, 14, 120);
+        // Iron - metallic look (larger)
+        ctx.fillRect(-13, -100, 26, 200);
 
         // Metallic shine
-        const gradient = ctx.createLinearGradient(-7, 0, 7, 0);
+        const gradient = ctx.createLinearGradient(-13, 0, 13, 0);
         gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
-        gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)');
+        gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.4)');
         gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
         ctx.fillStyle = gradient;
-        ctx.fillRect(-7, -60, 14, 120);
+        ctx.fillRect(-13, -100, 26, 200);
     }
 
     ctx.restore();
 
     // Draw mode label
     ctx.fillStyle = '#fff';
-    ctx.font = '14px Arial';
+    ctx.font = '16px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText(config.name, centerX, centerY - 120);
+    ctx.fillText(config.name, centerX, centerY - 200);
+    ctx.font = '12px Arial';
+    ctx.fillText('(Shift+Click to change mode)', centerX, centerY - 180);
 }
 
 function drawCotton() {
     const cottonItem = items.find(i => i.id === 'cotton');
     if (cottonItem.placed && !state.fireLit) {
-        // Draw cotton at contact point
+        // Draw cotton at contact point (larger)
         ctx.fillStyle = cottonItem.color;
         ctx.beginPath();
-        ctx.ellipse(centerX, spindleContactY, 30, 20, 0, 0, Math.PI * 2);
+        ctx.ellipse(centerX, spindleContactY, 50, 35, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Cotton texture
         ctx.fillStyle = '#E8E8D8';
-        for (let i = 0; i < 8; i++) {
-            const angle = (i / 8) * Math.PI * 2;
-            const x = centerX + Math.cos(angle) * 15;
-            const y = spindleContactY + Math.sin(angle) * 10;
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const x = centerX + Math.cos(angle) * 25;
+            const y = spindleContactY + Math.sin(angle) * 18;
             ctx.beginPath();
-            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
             ctx.fill();
         }
     }
@@ -616,6 +693,62 @@ function drawIgnitionProgress() {
     }
 }
 
+// Draw forest background
+function drawForest() {
+    if (!state.showForest) return;
+
+    // Sky gradient
+    const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    skyGradient.addColorStop(0, '#87CEEB');
+    skyGradient.addColorStop(0.6, '#98D8E8');
+    skyGradient.addColorStop(1, '#B0E0E6');
+    ctx.fillStyle = skyGradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Ground
+    ctx.fillStyle = '#2F5233';
+    ctx.fillRect(0, canvas.height * 0.7, canvas.width, canvas.height * 0.3);
+
+    // Grass texture
+    ctx.fillStyle = '#3A6B3F';
+    for (let i = 0; i < 50; i++) {
+        const x = Math.random() * canvas.width;
+        const y = canvas.height * 0.7 + Math.random() * canvas.height * 0.3;
+        ctx.fillRect(x, y, 2, 10);
+    }
+
+    // Draw trees in background
+    const treePositions = [
+        { x: canvas.width * 0.15, y: canvas.height * 0.5, size: 1.2 },
+        { x: canvas.width * 0.25, y: canvas.height * 0.55, size: 0.9 },
+        { x: canvas.width * 0.75, y: canvas.height * 0.52, size: 1.1 },
+        { x: canvas.width * 0.85, y: canvas.height * 0.57, size: 0.8 },
+        { x: canvas.width * 0.1, y: canvas.height * 0.6, size: 1.0 },
+        { x: canvas.width * 0.9, y: canvas.height * 0.62, size: 0.95 }
+    ];
+
+    for (const tree of treePositions) {
+        // Tree trunk
+        ctx.fillStyle = '#5C4033';
+        ctx.fillRect(tree.x - 10 * tree.size, tree.y, 20 * tree.size, 80 * tree.size);
+
+        // Tree foliage
+        ctx.fillStyle = '#228B22';
+        ctx.beginPath();
+        ctx.arc(tree.x, tree.y - 20 * tree.size, 50 * tree.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#2E8B57';
+        ctx.beginPath();
+        ctx.arc(tree.x - 20 * tree.size, tree.y, 40 * tree.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(tree.x + 20 * tree.size, tree.y, 40 * tree.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
 // Animation loop
 let lastTime = Date.now();
 
@@ -626,9 +759,14 @@ function animate() {
 
     update(deltaTime);
 
-    // Clear canvas
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Draw background
+    if (state.showForest) {
+        drawForest();
+    } else {
+        // Clear canvas with dark background
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     // Draw everything
     drawBase();
