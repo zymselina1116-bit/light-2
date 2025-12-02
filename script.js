@@ -18,7 +18,7 @@ const state = {
     fireLit: false,
     cottonPlaced: false,
     cottonInFire: false,
-    showForest: false,
+    showForest: true, // Always show rainforest background
     flameSize: 1,
     mouseX: 0,
     mouseY: 0,
@@ -28,7 +28,8 @@ const state = {
     draggingItem: null,
     dragOffset: { x: 0, y: 0 },
     isRotating: false,
-    rotatingSpindle: false
+    rotatingSpindle: false,
+    prevAngle: 0
 };
 
 // Spindle configurations
@@ -158,9 +159,36 @@ canvas.addEventListener('mousemove', (e) => {
         }
     }
 
-    // Handle spindle rotation via drag
+    // Handle spindle rotation via circular drag
     if (state.rotatingSpindle && !state.fireLit) {
-        state.mouseSpeed = Math.sqrt(dx * dx + dy * dy) / (deltaTime / 16.67);
+        const spindleCenterX = centerX;
+        const spindleCenterY = centerY - 80;
+
+        // Calculate angle from spindle center to mouse position
+        const currentAngle = Math.atan2(
+            state.mouseY - spindleCenterY,
+            state.mouseX - spindleCenterX
+        );
+
+        const prevAngle = Math.atan2(
+            state.prevMouseY - spindleCenterY,
+            state.prevMouseX - spindleCenterX
+        );
+
+        // Calculate angular change
+        let deltaAngle = currentAngle - prevAngle;
+
+        // Handle wrap-around (from PI to -PI)
+        if (deltaAngle > Math.PI) deltaAngle -= Math.PI * 2;
+        if (deltaAngle < -Math.PI) deltaAngle += Math.PI * 2;
+
+        // Update rotation
+        state.rotation += deltaAngle;
+
+        // Calculate rotational speed (magnitude of angular change)
+        if (deltaTime > 0) {
+            state.mouseSpeed = Math.abs(deltaAngle) / (deltaTime / 16.67) * 100;
+        }
     }
 });
 
@@ -250,7 +278,6 @@ canvas.addEventListener('mouseup', (e) => {
 
                 if (distance < 100) {
                     state.cottonInFire = true;
-                    state.showForest = true;
                     state.flameSize += 1.5;
                     item.available = false;
                 } else {
@@ -292,7 +319,7 @@ function extinguishFire() {
     state.rotation = 0;
     state.rotationSpeed = 0;
     state.cottonInFire = false;
-    state.showForest = false;
+    // Keep showForest as true - rainforest background is always visible
     sparks.length = 0;
 
     // Reset cotton
@@ -328,15 +355,15 @@ function createSpark(x, y, config) {
 
 // Update function
 function update(deltaTime) {
-    // Update rotation based on mouse speed
+    // Update rotation based on rotational drag (rotation is now handled in mousemove)
     if (!state.fireLit) {
-        state.rotationSpeed = state.mouseSpeed * 0.3;
-        state.rotation += state.rotationSpeed * deltaTime / 16.67;
+        // Mouse speed now represents rotational speed
+        state.rotationSpeed = state.mouseSpeed;
 
         const config = spindleConfigs[state.spindleMode];
         const ignitionTime = state.cottonPlaced ? config.ignitionTimeCotton : config.ignitionTime;
 
-        // Update ignition progress
+        // Update ignition progress based on rotational speed
         if (state.rotationSpeed > SPARK_THRESHOLD) {
             state.ignitionProgress += deltaTime / (ignitionTime * 1000);
 
@@ -695,8 +722,6 @@ function drawIgnitionProgress() {
 
 // Draw rainforest background
 function drawForest() {
-    if (!state.showForest) return;
-
     const time = Date.now() / 1000;
 
     // Tropical sky with mist - darker, more humid atmosphere
@@ -916,14 +941,8 @@ function animate() {
 
     update(deltaTime);
 
-    // Draw background
-    if (state.showForest) {
-        drawForest();
-    } else {
-        // Clear canvas with dark background
-        ctx.fillStyle = '#1a1a2e';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    // Always draw rainforest background
+    drawForest();
 
     // Draw everything
     drawBase();
