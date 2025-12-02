@@ -693,59 +693,216 @@ function drawIgnitionProgress() {
     }
 }
 
-// Draw forest background
+// Draw rainforest background
 function drawForest() {
     if (!state.showForest) return;
 
-    // Sky gradient
+    const time = Date.now() / 1000;
+
+    // Tropical sky with mist - darker, more humid atmosphere
     const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    skyGradient.addColorStop(0, '#87CEEB');
-    skyGradient.addColorStop(0.6, '#98D8E8');
-    skyGradient.addColorStop(1, '#B0E0E6');
+    skyGradient.addColorStop(0, '#5C8A8A');
+    skyGradient.addColorStop(0.4, '#6B9B9B');
+    skyGradient.addColorStop(0.7, '#7AB8A8');
+    skyGradient.addColorStop(1, '#88C9B8');
     ctx.fillStyle = skyGradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Ground
-    ctx.fillStyle = '#2F5233';
-    ctx.fillRect(0, canvas.height * 0.7, canvas.width, canvas.height * 0.3);
-
-    // Grass texture
-    ctx.fillStyle = '#3A6B3F';
-    for (let i = 0; i < 50; i++) {
-        const x = Math.random() * canvas.width;
-        const y = canvas.height * 0.7 + Math.random() * canvas.height * 0.3;
-        ctx.fillRect(x, y, 2, 10);
+    // Mist/fog layers
+    for (let i = 0; i < 3; i++) {
+        const mistGradient = ctx.createRadialGradient(
+            canvas.width * (0.3 + i * 0.2),
+            canvas.height * 0.3,
+            0,
+            canvas.width * (0.3 + i * 0.2),
+            canvas.height * 0.3,
+            canvas.width * 0.4
+        );
+        mistGradient.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
+        mistGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = mistGradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    // Draw trees in background
-    const treePositions = [
-        { x: canvas.width * 0.15, y: canvas.height * 0.5, size: 1.2 },
-        { x: canvas.width * 0.25, y: canvas.height * 0.55, size: 0.9 },
-        { x: canvas.width * 0.75, y: canvas.height * 0.52, size: 1.1 },
-        { x: canvas.width * 0.85, y: canvas.height * 0.57, size: 0.8 },
-        { x: canvas.width * 0.1, y: canvas.height * 0.6, size: 1.0 },
-        { x: canvas.width * 0.9, y: canvas.height * 0.62, size: 0.95 }
+    // Dense jungle ground with rich soil
+    ctx.fillStyle = '#1a3a2a';
+    ctx.fillRect(0, canvas.height * 0.65, canvas.width, canvas.height * 0.35);
+
+    // Undergrowth layers - darker greens
+    ctx.fillStyle = '#234d34';
+    ctx.fillRect(0, canvas.height * 0.65, canvas.width, canvas.height * 0.1);
+
+    // Dense foliage in foreground (ferns and bushes)
+    for (let i = 0; i < 40; i++) {
+        const x = (i / 40) * canvas.width;
+        const y = canvas.height * 0.72 + Math.random() * 50;
+        const size = 20 + Math.random() * 30;
+
+        // Large tropical leaves
+        ctx.fillStyle = i % 2 === 0 ? '#1e4d2b' : '#2a5c3a';
+        ctx.beginPath();
+        ctx.ellipse(x, y, size, size * 1.5, Math.random() * Math.PI, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Background layers - distant jungle
+    for (let layer = 0; layer < 3; layer++) {
+        const layerY = canvas.height * (0.35 + layer * 0.1);
+        const opacity = 0.3 + layer * 0.2;
+
+        for (let i = 0; i < 8; i++) {
+            const x = (i / 8) * canvas.width + (layer * 50);
+            ctx.fillStyle = `rgba(46, 125, 50, ${opacity})`;
+            ctx.beginPath();
+            ctx.arc(x, layerY, 40 + layer * 20, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // Tall tropical trees with palm-like appearance
+    const rainforestTrees = [
+        { x: canvas.width * 0.12, y: canvas.height * 0.45, size: 1.3, type: 'palm' },
+        { x: canvas.width * 0.22, y: canvas.height * 0.5, size: 1.0, type: 'broad' },
+        { x: canvas.width * 0.35, y: canvas.height * 0.48, size: 1.2, type: 'palm' },
+        { x: canvas.width * 0.65, y: canvas.height * 0.47, size: 1.1, type: 'broad' },
+        { x: canvas.width * 0.78, y: canvas.height * 0.52, size: 0.9, type: 'palm' },
+        { x: canvas.width * 0.88, y: canvas.height * 0.5, size: 1.15, type: 'broad' },
+        { x: canvas.width * 0.05, y: canvas.height * 0.55, size: 0.85, type: 'palm' },
+        { x: canvas.width * 0.95, y: canvas.height * 0.54, size: 0.95, type: 'broad' }
     ];
 
-    for (const tree of treePositions) {
-        // Tree trunk
-        ctx.fillStyle = '#5C4033';
-        ctx.fillRect(tree.x - 10 * tree.size, tree.y, 20 * tree.size, 80 * tree.size);
+    for (const tree of rainforestTrees) {
+        // Tall, slender trunk
+        ctx.fillStyle = '#4a3428';
+        const trunkWidth = tree.type === 'palm' ? 12 : 18;
+        ctx.fillRect(
+            tree.x - (trunkWidth / 2) * tree.size,
+            tree.y,
+            trunkWidth * tree.size,
+            100 * tree.size
+        );
 
-        // Tree foliage
-        ctx.fillStyle = '#228B22';
-        ctx.beginPath();
-        ctx.arc(tree.x, tree.y - 20 * tree.size, 50 * tree.size, 0, Math.PI * 2);
-        ctx.fill();
+        // Trunk texture
+        ctx.fillStyle = '#3a2418';
+        for (let i = 0; i < 5; i++) {
+            ctx.fillRect(
+                tree.x - (trunkWidth / 2) * tree.size,
+                tree.y + i * 20 * tree.size,
+                trunkWidth * tree.size,
+                3
+            );
+        }
 
-        ctx.fillStyle = '#2E8B57';
-        ctx.beginPath();
-        ctx.arc(tree.x - 20 * tree.size, tree.y, 40 * tree.size, 0, Math.PI * 2);
-        ctx.fill();
+        if (tree.type === 'palm') {
+            // Palm fronds
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                ctx.save();
+                ctx.translate(tree.x, tree.y - 10 * tree.size);
+                ctx.rotate(angle);
 
+                // Frond gradient
+                const frondGradient = ctx.createLinearGradient(0, 0, 0, 60 * tree.size);
+                frondGradient.addColorStop(0, '#2d5016');
+                frondGradient.addColorStop(1, '#1a3010');
+                ctx.fillStyle = frondGradient;
+
+                // Long leaf shape
+                ctx.beginPath();
+                ctx.ellipse(0, 30 * tree.size, 12 * tree.size, 50 * tree.size, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        } else {
+            // Broad-leaf canopy (multiple layers)
+            const canopyLayers = [
+                { offset: 0, size: 70, color: '#1e4d2b' },
+                { offset: -20, size: 60, color: '#2a5c3a' },
+                { offset: 20, size: 55, color: '#1a3a1a' },
+                { offset: -30, size: 50, color: '#234d2b' }
+            ];
+
+            for (const layer of canopyLayers) {
+                ctx.fillStyle = layer.color;
+                ctx.beginPath();
+                ctx.arc(
+                    tree.x + layer.offset * tree.size * 0.5,
+                    tree.y - 10 * tree.size,
+                    layer.size * tree.size,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+            }
+        }
+    }
+
+    // Hanging vines
+    for (let i = 0; i < 15; i++) {
+        const vineX = (i / 15) * canvas.width + Math.sin(time + i) * 10;
+        const vineStartY = canvas.height * (0.2 + Math.random() * 0.2);
+        const vineLength = 100 + Math.random() * 150;
+
+        ctx.strokeStyle = 'rgba(40, 60, 30, 0.6)';
+        ctx.lineWidth = 2 + Math.random() * 2;
         ctx.beginPath();
-        ctx.arc(tree.x + 20 * tree.size, tree.y, 40 * tree.size, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(vineX, vineStartY);
+
+        // Curved vine
+        for (let j = 0; j < 10; j++) {
+            const y = vineStartY + (j / 10) * vineLength;
+            const xOffset = Math.sin(time * 0.5 + i + j * 0.5) * 15;
+            ctx.lineTo(vineX + xOffset, y);
+        }
+        ctx.stroke();
+
+        // Small leaves on vines
+        for (let j = 0; j < 5; j++) {
+            const leafY = vineStartY + (j / 5) * vineLength;
+            const leafX = vineX + Math.sin(time * 0.5 + i + j * 0.5) * 15;
+            ctx.fillStyle = '#2a5c3a';
+            ctx.beginPath();
+            ctx.ellipse(leafX + 5, leafY, 8, 12, Math.PI / 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // Large tropical plants in foreground
+    for (let i = 0; i < 10; i++) {
+        const plantX = (i / 10) * canvas.width;
+        const plantY = canvas.height * 0.75;
+
+        // Large fan leaves
+        for (let j = 0; j < 5; j++) {
+            const angle = (j / 5) * Math.PI - Math.PI / 2;
+            ctx.save();
+            ctx.translate(plantX, plantY);
+            ctx.rotate(angle);
+
+            const leafGradient = ctx.createLinearGradient(0, 0, 0, 60);
+            leafGradient.addColorStop(0, '#1e4d2b');
+            leafGradient.addColorStop(1, '#0d2614');
+            ctx.fillStyle = leafGradient;
+
+            ctx.beginPath();
+            ctx.ellipse(0, 30, 20, 50, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+    }
+
+    // Atmospheric rain effect
+    ctx.strokeStyle = 'rgba(200, 220, 230, 0.15)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 100; i++) {
+        const x = Math.random() * canvas.width;
+        const y = (Math.random() * canvas.height + time * 200 * (i % 3 + 1)) % canvas.height;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 2, y + 15);
+        ctx.stroke();
     }
 }
 
