@@ -958,3 +958,15 @@ function animate() {
 }
 
 animate();
+
+// Hide instructions after 5 seconds
+setTimeout(() => {
+    const instructions = document.getElementById('instructions');
+    if (instructions) {
+        instructions.style.opacity = '0';
+        instructions.style.transition = 'opacity 1s ease-out';
+        setTimeout(() => {
+            instructions.style.display = 'none';
+        }, 1000);
+    }
+}, 5000);
